@@ -76,7 +76,15 @@
 	.annotationRow {	
 		font-size:5px;
 	}
+	
+	.links_via-on {
+		border: 2px solid #0000dd;
+	}
     
+	.cellBased-on {
+		border: 2px solid #00dd00;
+	}
+	
     .col-selectable .ui-selecting { background: #FECA40; }
 	.col-selectable .ui-selected { background: #F39814; }
 	
@@ -392,27 +400,44 @@
     }
   }
   
-    // Generates the subtables for each column header in the CSV file.
-	// every subtable will be the same, (except for the ID's of the cells)
+    // Accessory function to generatee the subtables for each column header in the CSV file.
+	// Every subtable will be the same, (except for the ID's of the cells)
 	//    with 3 rows in 1 column. These are the DEFAULT subtables; ones for
 	//    IMPLICIT or EXPLICIT BUNDLES will be different (and in other functions) 
-	// input parameters are
-	// * text: presumably the header for the column from the original CSV file,
+	// Input parameters are:
+	// - text: presumably the header for the column from the original CSV file,
 	//	   to be placed in the first row of the column.
-	// * colIndex: the position of that cell in the table. Subrows are 
-	//	   identified as header row, "propertyRow,"+colIndex, and "classRow,"+colIndex - these last two
-	//	   rows are classed as droppable targets.
+	// - colIndex: the position of that cell in the table. Subrows are identified
+	//	   as "nameRow,"+colIndex, "propertyRow,"+colIndex, and "classRow,"+colIndex
+	//	   these last two rows are classed as droppable targets.
 	function createSubtable(text,colIndex) {
 		var theader = '<table>\n';
 		var tbody = '';
-		tbody += '<tr><td id=0,' + colIndex + '>' + text + '</td></tr>\n';
+		tbody += '<tr><td id=nameRow,' + colIndex + '>' + text + '</td></tr>\n';
+		tbody += '<tr><td style="color:red" class="droppable-prop" id=propertyRow,' + colIndex + '>[propertyRow]</td></tr>\n';
+		tbody += '<tr><td style="color:red" class="droppable-class" id=classRow,' + colIndex + '>[classRow]</td></tr>\n';
+		var tfooter = '</table>';
+		var subtable = theader + tbody + tfooter;
+		return subtable;
+	}// /createSubtable
+	
+	// ** IN PROGRESS **
+	// This should act as the above, except to create a subtable for describing a bundle
+	//  - One row should be a dropdown menu that allows the user to select which column
+	//    is the resource representing the bundle, with the default option for "implicit"
+	//  - Ideally, selecting a column for the resource should copy the column header of the
+	//    original column. 
+	//    * How do we keep that up to date???
+	function createBundleSubtable(text,colIndex) {
+		var theader = '<table>\n';
+		var tbody = '';
+		tbody += '<tr><td id=nameRow,' + colIndex + '>' + text + '</td></tr>\n';
 		tbody += '<tr><td style="color:red" class="droppable-prop" id=propertyRow,' + colIndex + '>[propertyRow]</td></tr>\n';
 		tbody += '<tr><td style="color:red" class="droppable-class" id=classRow,' + colIndex + '>[classRow]</td></tr>\n';
 		var tfooter = '</table>';
 		var subtable = theader + tbody + tfooter;
 		return subtable;
 	}
-	
 	
 	// Accessory function for removing things from arrays
 	// Takes two arguments:
@@ -459,47 +484,137 @@
 	//   be the only function that can modify this array.
 	var links_via = [];
 	
+	// Like the above, the indices of columns designated for cell-based conversion 
+	//    are kept in an array, as well, which is empty at creation. The callback for
+	//    "toggle-cell-based" adds to and removes from this array;
+	var cellBased = [];
+	
 	// ******************************************************************************
 	//                   context menu and its callback functions!
 	// ******************************************************************************
 	
-	// Creates and enables the context menu on the column headers
-	// Each function appears under "items" and should have a NAME and a CALLBACK,
-	//   the latter being to the javascript function for that menu choice.
+	// Creates and enables the context menu on the column headers!
+	// Each function is placed under "items", and should have a NAME and a CALLBACK.
+	// If a callback is not specified, then it will utilize the default callback.
 	$(function (){
 			$.contextMenu({
 				selector: '.the-context-menu', 
+				// This is the default callback, which will be used for any functions
+				//    that do not have their own callbacks specified. It echoes the 
+				//    key of the selection and the column on which the menu was invoked
+				//    to the console.
 				callback: function(key, options) {
 					var index = $( "th" ).index( this );
 					var m = "clicked: " + key + ", invoked on col: " + index;
 					console.log(m);
 				},
+				// Each of these is one item in the context menu list.
+				// Documentation at http://medialize.github.io/jQuery-contextMenu/docs.html
 				items: {
 					"toggle-cell-based": {
-						name: "Designate for Cell-based Conversion"
-					},
-					"toggle-links_via": {
-						name: "Enable/Disable links_via",
+						// Modifies the cellBased array to add or remove column indices.
+						// If a selected column is in the array, then it will be removed (toggled OFF)
+						// If the column is not in the array, then it will be added (toggled ON)
+						// * NOTE that if this is called when only one column is selected,
+						//   currently it will toggle the column on which the menu was invoked,
+						//   NOT the selected column.
+						name: "Enable/Disable Cell-based Conversion",
 						callback: function() {
-							for (col in currentlySelected) { 
+							// if one or fewer columns are selected, add/remove the column on which the menu was invoked
+							if (currentlySelected.length <= 1){ 
+								var index = $("th").index(this);
+								var toggle = document.getElementById("nameRow,"+index);
 								// if the column is already there, remove it
-								if ( existsA(links_via,col) ){
-									removeA(links_via, col);
-									console.log("removing col " + col);
+								if ( existsA(cellBased,index) ){
+									$(toggle).removeClass("cellBased-on");
+									removeA(cellBased,index);
+									console.log("removing col " + index);
 								}
 								// if the column is not there, add it
 								else {
-									links_via.push(col);
-									console.log("adding col " + col);
+									$(toggle).attr("class","cellBased-on");
+									cellBased.push(index);
+									console.log("adding col " + index);
 								}
-							} // /for	
+							}// /if
+							// if more than one column is selected, perform the toggle on ALL selected columns
+							else { 
+								for (i in currentlySelected) { 
+									var toggle = document.getElementById("nameRow,"+currentlySelected[i]);
+									// if the column is already there, remove it
+									if ( existsA(cellBased,currentlySelected[i]) ){
+										$(toggle).removeClass("cellBased-on");
+										removeA(cellBased,currentlySelected[i]);
+										console.log("removing col " + currentlySelected[i]);
+									}
+									// if the column is not there, add it
+									else {
+										$(toggle).attr("class","cellBased-on");
+										cellBased.push(currentlySelected[i]);
+										console.log("adding col " + currentlySelected[i]);
+									}
+								} // /for	
+							}
+							console.log("currently specified for cell-based: " + cellBased);
+						} // /cell-based callback
+					}, // /cell-based
+					
+					"toggle-links_via": {
+						// Modifies the links_via array to add or remove column indices.
+						// If a selected column is in the array, then it will be removed (toggled OFF)
+						// If the column is not in the array, then it will be added (toggled ON)
+						// * NOTE that if this is called when only one column is selected,
+						//   currently it will toggle the column on which the menu was invoked,
+						//   NOT the selected column.
+						name: "Enable/Disable links_via",
+						callback: function() {
+						// if one or fewer columns are selected, add/remove the column on which the menu was invoked
+							if (currentlySelected.length <= 1){ 
+								var index = $("th").index(this);
+								var toggle = document.getElementById("nameRow,"+index);
+								// if the column is already there, remove it
+								if ( existsA(links_via,index) ){
+									$(toggle).removeClass("links_via-on");
+									removeA(links_via,index);
+									console.log("removing col " + index);
+								}
+								// if the column is not there, add it
+								else {
+									$(toggle).attr("class","links_via-on");
+									links_via.push(index);
+									console.log("adding col " + index);
+								}
+							}// /if
+							// if more than one column is selected, perform the toggle on ALL selected columns
+							else {
+								for (i in currentlySelected) { 
+									var toggle = document.getElementById("nameRow,"+currentlySelected[i]);
+									// if the column is already there, remove it
+									if ( existsA(links_via,currentlySelected[i]) ){
+										$(toggle).removeClass("links_via-on");
+										removeA(links_via,currentlySelected[i]);
+										console.log("removing col " + currentlySelected[i]);
+									}
+									// if the column is not there, add it
+									else {
+										$(toggle).attr("class","links_via-on");
+										links_via.push(currentlySelected[i]);
+										console.log("adding col " + currentlySelected[i]);
+									}
+								} // /for	
+							}// /else
 							console.log("currently specified for links_via: " + links_via);
 						} // /links_via callback
 					}, // /links_via
+					
 					"bundle": {name: "Create Bundle"},
+					
 					"comment": {name: "Add Comment"},
+					
 					"eg": {name: "Add Canonical Value (eg)"},
+					
 					"new-triple": {name: "Forge New Triple"},
+					
 				}// /items
 			}); // /context menu
 			// for debugging:
@@ -514,6 +629,7 @@
 	// ******************************************************************************
   
  //csv file parser and table loader
+ // This is what actually renders the table in the #list div!
  function handleFileSelect(){
   if (window.hasTable == 1) return;
   var file = document.getElementById("the_file").files[0];
